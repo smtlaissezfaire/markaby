@@ -1,118 +1,155 @@
 require File.expand_path(File.dirname(__FILE__) + "/../spec_helper")
+require 'byebug'
 
 module Markaby
   describe Builder do
     before do
-      Markaby::Builder.restore_defaults!
+      @builder = Markaby::Builder.new
     end
 
-    after do
-      Markaby::Builder.restore_defaults!
-    end
-
-    it "should have method missing as a private method" do
-      private_methods = Markaby::Builder.private_instance_methods.dup
-      private_methods.map! { |m| m.to_sym }
-      private_methods.should include(:method_missing)
-    end
-
-    describe "setting options" do
-      it "should be able to restore defaults after setting" do
-        Markaby::Builder.set :indent, 2
-        Markaby::Builder.restore_defaults!
-
-        Markaby::Builder.get(:indent).should == 0
+    context "internal state - ast" do
+      it "should start off with empty ast" do
+        @builder.ast.should == []
       end
 
-      it "should be able to set global options" do
-        Markaby::Builder.set :indent, 2
-        Markaby::Builder.get(:indent).should == 2
+      it "should be able to create a tag + set internal state" do
+        @builder.tag(:foo)
+        @builder.ast.should == [
+          [:tag, :foo, {}]
+        ]
       end
-    end
 
-    describe "hidden internal variables" do
-      # internal clobbering by passed in assigns
-      it "should not overwrite internal helpers ivar when assigning a :helpers key" do
-        helper = Class.new do
-          def some_method
-            "a value"
-          end
-        end.new
+      it "should be able to create two tags in a row" do
+        @builder.tag(:foo)
+        @builder.tag(:bar)
 
-        builder = Markaby::Builder.new({:helpers => nil}, helper)
-        builder.some_method.should == "a value"
+        @builder.ast.should == [
+          [:tag, :foo, {}],
+          [:tag, :bar, {}]
+        ]
       end
-    end
 
-    describe "evaluating blocks" do
-      it "should evaluate a pure-string block (without requiring a call to the text method)" do
-        b = Builder.new do
-          "foo"
+      it "should be able to nest tags" do
+        @builder.tag(:foo) do
+          @builder.tag(:bar)
         end
 
-        b.to_s.should == "foo"
+        @builder.ast.should == [
+          [:tag, :foo, {}, [
+            [:tag, :bar, {}]
+          ]],
+        ]
       end
 
-      it "should only evaluate the last argument in a pure-string block" do
-        b = Builder.new do
-          "foo"
-          "bar"
+      it "should be able to nest many tags" do
+        @builder.tag(:foo) do
+          @builder.tag(:bar)
         end
 
-        b.to_s.should == "bar"
-      end
-
-      it "should evaluate pure-strings inside an tag" do
-        b = Builder.new do
-          h1 do
-            "foo"
-          end
-        end
-
-        b.to_s.should == "<h1>foo</h1>"
-      end
-
-      it "should ignore a pure string in the block, even if comes last, if there has been any markup whatsoever" do
-        b = Builder.new do
-          h1
-          "foo"
-        end
-
-        b.to_s.should == "<h1/>"
+        @builder.ast.should == [
+          [:tag, :foo, {}, [
+            [:tag, :bar, {}]
+          ]],
+        ]
       end
     end
 
-    describe "capture" do
-      before do
-        @builder = Builder.new
+    context "compiling" do
+      it "should be able to compile" do
+        @builder.tag(:foo)
+
+        # @builder.compile.should == "<foo></foo>"
+        @builder.compile.should == [
+          "<foo",
+          ">",
+          "</foo>",
+        ]
       end
 
-      it "should return the string captured" do
-        out = @builder.capture do
-          h1 "TEST"
-          h2 "CAPTURE ME"
+      it "should be able to delay compilation" do
+        @builder.tag(:foo, {bar: 1})
+
+        @builder.compile.should == [
+          "<foo",
+          " ",
+          [:render_args, { bar: 1 }],
+          ">",
+          "</foo>",
+        ]
+        # @builder.compile.should == '<foo #{evaluate_args({:bar=>1})}></foo>'
+        @builder.render.should == '<foo bar="1"></foo>'
+      end
+
+      it "should delay evaluation of arguments" do
+        @builder.eval_code do
+          tag(:foo, { bar: x })
         end
 
-        out.should == "<h1>TEST</h1><h2>CAPTURE ME</h2>"
-      end
+        @builder.compile.should == [
+          "<foo",
+          " ",
+          [:render_args, '{ bar: x }'],
+          ">",
+          "</foo>",
+        ]
 
-      it "should not change the output buffer" do
-        lambda {
-          @builder.capture do
-            h1 "FOO!"
-          end
-        }.should_not change { @builder.to_s }
-      end
-
-      it "should be able to capture inside a capture" do
-        out = @builder.capture do
-          capture do
-            h1 "foo"
-          end
+        class << self
+          attr_accessor :x
         end
 
-        out.should == "<h1>foo</h1>"
+        self.x = 10
+
+        @builder.context = self
+
+        # @builder.compile.should == '<foo #{evaluate_args({:bar=>1})}></foo>'
+        @builder.render.should == '<foo bar="10"></foo>'
       end
     end
+
+
+    # it "should be able to manage internal state" do
+    #   @builder.div do
+    #     @builder.blockquote do
+    #     end
+    #   end
+    #
+    #   @builder.ast.should == [
+    #     [:tag, :div, {}, [
+    #       [:tag, :blockquote, {}]
+    #     ]],
+    #
+    #   ]
+    # end
+
+    # it "should be able to compile a tag" do
+    #   @builder.div do
+    #   end
+    #
+    #   @builder.compile.should == "<div></div>"
+    # end
+    #
+    # it "should be able to compile the right tag" do
+    #   @builder.blockquote do
+    #   end
+    #
+    #   @builder.compile.should == "<blockquote></blockquote>"
+    # end
+    #
+    # it "should be able to render after compiling" do
+    #   @builder.blockquote do
+    #   end
+    #
+    #   @builder.compile
+    #   @builder.render.should == "<blockquote></blockquote>"
+    # end
+    #
+    # it "should be able to nest tags" do
+    #   @builder.div do
+    #     @builder.blockquote do
+    #     end
+    #   end
+    #
+    #   @builder.compile.should == "<div><blockquote></blockquote></div>"
+    # end
   end
 end

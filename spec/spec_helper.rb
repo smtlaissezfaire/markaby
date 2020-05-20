@@ -28,3 +28,5 @@ module TestHelpers
     end
   end
 end
+
+# config.expect_with(:rspec) { |c| c.syntax = :should }
