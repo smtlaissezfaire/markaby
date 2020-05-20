@@ -3,18 +3,13 @@ require 'method_source'
 require 'ast'
 require 'unparser'
 
-class AstProcessor
-  include AST::Processor::Mixin
-end
-
 module Markaby
   class Builder
-
     def initialize
-      @ast = []
+      @stack = []
     end
 
-    attr_reader :ast
+    attr_reader :stack
 
     def eval_code(source = nil, &block)
       source_code = source || block.source
@@ -49,23 +44,23 @@ module Markaby
 
     def tag(name, options={}, &block)
       tag_stack = [:tag, name, options]
-      @ast.push(tag_stack)
+      @stack.push(tag_stack)
 
       if block_given?
         new_stack = []
         tag_stack.push(new_stack)
 
-        old_ast = @ast
-        @ast = new_stack
+        old_ast = @stack
+        @stack = new_stack
 
         yield
 
-        @ast = old_ast
+        @stack = old_ast
       end
     end
 
-    def compile(ast = @ast, out = [])
-      ast.map do |type, tag, options, subast|
+    def compile(stack = @stack, out = [])
+      stack.map do |type, tag, options, subast|
         out << "<#{tag}"
 
         if !options.empty?
@@ -104,18 +99,5 @@ module Markaby
         end
       end.join("")
     end
-
-    # def div(&block)
-    #   tag("div", {}, &block)
-    # end
-    #
-    # def blockquote(&block)
-    #   tag("blockquote", {}, &block)
-    # end
-    #
-    #
-    # def render
-    #   compile
-    # end
   end
 end

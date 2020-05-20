@@ -7,14 +7,14 @@ module Markaby
       @builder = Markaby::Builder.new
     end
 
-    context "internal state - ast" do
-      it "should start off with empty ast" do
-        @builder.ast.should == []
+    context "internal state - stack" do
+      it "should start off with empty stack" do
+        @builder.stack.should == []
       end
 
       it "should be able to create a tag + set internal state" do
         @builder.tag(:foo)
-        @builder.ast.should == [
+        @builder.stack.should == [
           [:tag, :foo, {}]
         ]
       end
@@ -23,7 +23,7 @@ module Markaby
         @builder.tag(:foo)
         @builder.tag(:bar)
 
-        @builder.ast.should == [
+        @builder.stack.should == [
           [:tag, :foo, {}],
           [:tag, :bar, {}]
         ]
@@ -34,7 +34,7 @@ module Markaby
           @builder.tag(:bar)
         end
 
-        @builder.ast.should == [
+        @builder.stack.should == [
           [:tag, :foo, {}, [
             [:tag, :bar, {}]
           ]],
@@ -46,7 +46,7 @@ module Markaby
           @builder.tag(:bar)
         end
 
-        @builder.ast.should == [
+        @builder.stack.should == [
           [:tag, :foo, {}, [
             [:tag, :bar, {}]
           ]],
@@ -105,7 +105,6 @@ module Markaby
         @builder.render.should == '<foo bar="10"></foo>'
       end
     end
-
 
     # it "should be able to manage internal state" do
     #   @builder.div do
