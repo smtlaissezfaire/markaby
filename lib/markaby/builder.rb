@@ -5,6 +5,21 @@ require 'unparser'
 
 module Markaby
   class Builder
+    class AstRecompiled
+      def initialize(sexp)
+        @sexp = sexp
+        @string = Unparser.unparse(sexp)
+      end
+
+      def to_sexp
+        @sexp
+      end
+
+      def to_s
+        @string
+      end
+    end
+
     def initialize
       @stack = []
     end
@@ -21,44 +36,88 @@ module Markaby
       process_tree(parse_tree)
     end
 
-    def tag(name, options={}, &block)
+    def tag(name, *args, &block)
+      @compiled = false
+
+      text = args.last.is_a?(String) ? args.pop : nil
+      options = args.any? ? args[0] : nil
+
       tag_stack = [:tag, name, options]
       @stack.push(tag_stack)
 
-      if block_given?
+      if block_given? || text
         new_stack = []
         tag_stack.push(new_stack)
 
         old_ast = @stack
         @stack = new_stack
 
-        yield
+        if text
+          new_stack << [:text, text]
+        end
+
+        yield if block_given?
 
         @stack = old_ast
       end
     end
 
-    def compile(stack = @stack, out = [])
-      stack.map do |type, tag, options, subast|
-        out << "<#{tag}"
+    def compile
+      @compiled ||= recursive_compile(@stack, [])
+    end
 
-        if !options.empty?
-          out << " "
-          out << [:render_args, options]
+    attr_accessor :context
+
+    def render
+      compile
+
+      @compiled.map do |type, val|
+        if type == :text
+          val
+        elsif type == :render_args
+          render_args(val)
+        else
+          raise "unknown?"
         end
+      end.join("")
+    end
 
-        out << ">"
-        out << "</#{tag}>"
+  private
+
+    def recursive_compile(stack, out)
+      stack.map do |type, tag, options, subast|
+        if type == :tag
+          out << [:text, "<#{tag}"]
+
+          if options
+            out << [:text, " "]
+            out << [:render_args, options]
+          end
+
+          out << [:text, ">"]
+
+          if subast
+            subast.each do |ast|
+              recursive_compile([ast], out)
+            end
+          end
+
+          out << [:text, "</#{tag}>"]
+        elsif type == :text
+          out << [:text, tag]
+        else
+          raise "got here"
+        end
       end
 
       out
     end
 
-    attr_accessor :context
-
     def render_args(args={})
-      if args.is_a?(String)
-        result = context.instance_eval(args)
+      if args.is_a?(AstRecompiled)
+        result = context.instance_eval(args.to_s)
+        # result = context.instance_eval(args)
+        # result = eval_sexp(args)
         render_args(result)
       else
         args.map do |key, value|
@@ -66,20 +125,6 @@ module Markaby
         end.join(" ")
       end
     end
-
-    def render
-      @compiled = compile
-
-      @compiled.map do |compiled|
-        if compiled.is_a?(String)
-          compiled
-        else
-          render_args(compiled[1])
-        end
-      end.join("")
-    end
-
-  private
 
     def process_tree(sexp)
       type = sexp.type
@@ -92,8 +137,8 @@ module Markaby
           tag_name = arguments.shift
           tag_name = tag_name.to_sexp_array[1]
 
-          args = Unparser.unparse(arguments[0])
-          tag(tag_name, args)
+          args = arguments.map { |sexp| AstRecompiled.new(sexp) }
+          tag(tag_name, *args)
         else
           eval_sexp sexp
         end
