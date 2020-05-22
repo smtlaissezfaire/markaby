@@ -21,31 +21,6 @@ module Markaby
       process_tree(parse_tree)
     end
 
-    def process_tree(sexp)
-      type = sexp.type
-
-      case type
-      when :send
-        receiver, method_name, *arguments = sexp.children
-
-        if receiver == nil && method_name == :tag
-          tag_name = arguments.shift
-          tag_name = tag_name.to_sexp_array[1]
-
-          args = Unparser.unparse(arguments[0])
-          tag(tag_name, args)
-        else
-          eval_sexp sexp
-        end
-      else
-        eval_sexp sexp
-      end
-    end
-
-    def eval_sexp(sexp)
-      eval(Unparser.unparse(sexp))
-    end
-
     def tag(name, options={}, &block)
       tag_stack = [:tag, name, options]
       @stack.push(tag_stack)
@@ -102,6 +77,33 @@ module Markaby
           render_args(compiled[1])
         end
       end.join("")
+    end
+
+  private
+
+    def process_tree(sexp)
+      type = sexp.type
+
+      case type
+      when :send
+        receiver, method_name, *arguments = sexp.children
+
+        if receiver == nil && method_name == :tag
+          tag_name = arguments.shift
+          tag_name = tag_name.to_sexp_array[1]
+
+          args = Unparser.unparse(arguments[0])
+          tag(tag_name, args)
+        else
+          eval_sexp sexp
+        end
+      else
+        eval_sexp sexp
+      end
+    end
+
+    def eval_sexp(sexp)
+      eval(Unparser.unparse(sexp))
     end
   end
 end
