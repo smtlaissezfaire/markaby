@@ -27,19 +27,23 @@ module Markaby
       case type
       when :send
         receiver, method_name, *arguments = sexp.children
+
         if receiver == nil && method_name == :tag
           tag_name = arguments.shift
           tag_name = tag_name.to_sexp_array[1]
 
           args = Unparser.unparse(arguments[0])
-          puts "calling tag with args: #{args}"
           tag(tag_name, args)
         else
-          eval(Unparser.unparse(sexp))
+          eval_sexp sexp
         end
       else
-        eval(Unparser.unparse(sexp))
+        eval_sexp sexp
       end
+    end
+
+    def eval_sexp(sexp)
+      eval(Unparser.unparse(sexp))
     end
 
     def tag(name, options={}, &block)
