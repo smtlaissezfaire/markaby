@@ -57,7 +57,7 @@ module Markaby
     context "compiling (and rendering)" do
       def array_compile_to_string(arrays)
         arrays.map do |key, value|
-          value = value.to_s if value.is_a?(Markaby::Builder::AstRecompiled)
+          value = value.to_s if value.is_a?(Markaby::AstRecompiled)
 
           [key, value]
         end
@@ -80,7 +80,7 @@ module Markaby
         array_compile_to_string(@builder.compile).should == [
           [:text, "<foo"],
           [:text, " "],
-          [:render_args, { bar: 1 }],
+          [:eval, { bar: 1 }],
           [:text, ">"],
           [:text, "</foo>"],
         ]
@@ -96,7 +96,7 @@ module Markaby
         array_compile_to_string(@builder.compile).should == [
           [:text, "<foo"],
           [:text, " "],
-          [:render_args, '{ bar: x }'],
+          [:eval, '{ bar: x }'],
           [:text, ">"],
           [:text, "</foo>"],
         ]
@@ -104,7 +104,6 @@ module Markaby
         class << self
           attr_accessor :x
         end
-
         self.x = 10
 
         @builder.context = self
@@ -183,6 +182,54 @@ module Markaby
         @builder.tag(:foo, {bar: 1}, "something")
         @builder.render.should == "<foo bar=\"1\">something</foo>"
       end
+
+      # it "should not delay evaluate the string" do
+      #   @builder.eval_code do
+      #     tag(:foo, x)
+      #   end
+      #
+      #   class << self
+      #     attr_accessor :x
+      #   end
+      #   self.x = "some text"
+      #
+      #   @builder.context = self
+      #
+      #   @builder.render.should == "<foo>some text</foo>"
+      # end
     end
   end
 end
+
+
+# foo
+# #=> <foo />
+#
+# foo do
+# end
+# #=> <foo></foo>
+#
+# foo do
+#   text "hi"
+# end
+# #=> <foo>hi</foo>
+#
+# foo some_args: 1 do
+# end
+# #=> <foo some_args="1"></foo>
+#
+# foo _self_closing: false
+# #=> <foo></foo>
+#
+# foo "testing"
+# #=> <foo>testing</foo>
+#
+# foo.bar
+# #=> <foo class="bar" />
+#
+# foo.bar.baz
+# #=> <foo class="bar baz" />
+#
+# foo.bar.baz.quxx!
+# #=> <foo class="bar baz" id="quxx" />
+#

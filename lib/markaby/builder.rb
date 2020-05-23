@@ -4,22 +4,24 @@ require 'ast'
 require 'unparser'
 
 module Markaby
-  class Builder
-    class AstRecompiled
-      def initialize(sexp)
-        @sexp = sexp
-        @string = Unparser.unparse(sexp)
-      end
-
-      def to_sexp
-        @sexp
-      end
-
-      def to_s
-        @string
-      end
+  class AstRecompiled
+    def initialize(sexp)
+      @sexp = sexp
+      @string = Unparser.unparse(sexp)
     end
 
+    def to_sexp
+      @sexp
+    end
+
+    def to_s
+      @string
+    end
+  end
+end
+
+module Markaby
+  class Builder
     def initialize
       @stack = []
     end
@@ -36,25 +38,35 @@ module Markaby
       process_tree(parse_tree)
     end
 
-    def tag(name, *args, &block)
-      @compiled = false
+    def text(str)
+      @stack.push([:text, str])
+    end
 
-      text = args.last.is_a?(String) ? args.pop : nil
+    def tag(name, *args, &block)
+      the_text = args.last.is_a?(String) ? args.pop : nil
       options = args.any? ? args[0] : nil
+
+      if the_text
+        _tag(name, options) do
+          text the_text
+        end
+      else
+        _tag(name, options, &block)
+      end
+    end
+
+    def _tag(name, options={}, &block)
+      @compiled = false
 
       tag_stack = [:tag, name, options]
       @stack.push(tag_stack)
 
-      if block_given? || text
+      if block_given?
         new_stack = []
         tag_stack.push(new_stack)
 
         old_ast = @stack
         @stack = new_stack
-
-        if text
-          new_stack << [:text, text]
-        end
 
         yield if block_given?
 
@@ -74,7 +86,7 @@ module Markaby
       @compiled.map do |type, val|
         if type == :text
           val
-        elsif type == :render_args
+        elsif type == :eval
           render_args(val)
         else
           raise "unknown?"
@@ -91,7 +103,7 @@ module Markaby
 
           if options
             out << [:text, " "]
-            out << [:render_args, options]
+            out << [:eval, options]
           end
 
           out << [:text, ">"]
@@ -116,13 +128,13 @@ module Markaby
     def render_args(args={})
       if args.is_a?(AstRecompiled)
         result = context.instance_eval(args.to_s)
-        # result = context.instance_eval(args)
-        # result = eval_sexp(args)
         render_args(result)
-      else
+      elsif args.is_a?(Hash)
         args.map do |key, value|
           "#{key}=\"#{value}\""
         end.join(" ")
+      else
+        args
       end
     end
 
