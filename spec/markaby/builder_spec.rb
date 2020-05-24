@@ -15,7 +15,7 @@ module Markaby
       it "should be able to create a tag + set internal state" do
         @builder.tag(:foo)
         @builder.stack.should == [
-          [:tag, :foo, nil]
+          [:tag, :foo, {}, {}]
         ]
       end
 
@@ -24,8 +24,8 @@ module Markaby
         @builder.tag(:bar)
 
         @builder.stack.should == [
-          [:tag, :foo, nil],
-          [:tag, :bar, nil]
+          [:tag, :foo, {}, {}],
+          [:tag, :bar, {}, {}]
         ]
       end
 
@@ -35,8 +35,8 @@ module Markaby
         end
 
         @builder.stack.should == [
-          [:tag, :foo, nil, [
-            [:tag, :bar, nil]
+          [:tag, :foo, {}, {}, [
+            [:tag, :bar, {}, {}]
           ]],
         ]
       end
@@ -47,8 +47,8 @@ module Markaby
         end
 
         @builder.stack.should == [
-          [:tag, :foo, nil, [
-            [:tag, :bar, nil]
+          [:tag, :foo, {}, {}, [
+            [:tag, :bar, {}, {}]
           ]],
         ]
       end
@@ -108,7 +108,6 @@ module Markaby
 
         @builder.context = self
 
-        # @builder.compile.should == '<foo #{evaluate_args({:bar=>1})}></foo>'
         @builder.render.should == '<foo bar="10"></foo>'
       end
     end
@@ -178,58 +177,15 @@ module Markaby
         @builder.render
       end
 
-      it "should be able to take a string and arguments" do
-        @builder.tag(:foo, {bar: 1}, "something")
-        @builder.render.should == "<foo bar=\"1\">something</foo>"
+      it "should be able to create a self closing tag" do
+        @builder.tag(:foo, {}, { self_closing: true })
+        @builder.render.should == "<foo />"
       end
 
-      # it "should not delay evaluate the string" do
-      #   @builder.eval_code do
-      #     tag(:foo, x)
-      #   end
-      #
-      #   class << self
-      #     attr_accessor :x
-      #   end
-      #   self.x = "some text"
-      #
-      #   @builder.context = self
-      #
-      #   @builder.render.should == "<foo>some text</foo>"
-      # end
+      it "should be able to create raw text" do
+        @builder.text("hi")
+        @builder.render.should == "hi"
+      end
     end
   end
 end
-
-
-# foo
-# #=> <foo />
-#
-# foo do
-# end
-# #=> <foo></foo>
-#
-# foo do
-#   text "hi"
-# end
-# #=> <foo>hi</foo>
-#
-# foo some_args: 1 do
-# end
-# #=> <foo some_args="1"></foo>
-#
-# foo _self_closing: false
-# #=> <foo></foo>
-#
-# foo "testing"
-# #=> <foo>testing</foo>
-#
-# foo.bar
-# #=> <foo class="bar" />
-#
-# foo.bar.baz
-# #=> <foo class="bar baz" />
-#
-# foo.bar.baz.quxx!
-# #=> <foo class="bar baz" id="quxx" />
-#

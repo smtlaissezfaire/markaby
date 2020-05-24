@@ -17,11 +17,19 @@ module Markaby
     def to_s
       @string
     end
+
+    def empty?
+      false
+    end
   end
 end
 
 module Markaby
   class Builder
+    MACRO_METHODS = [
+      :tag,
+    ]
+
     def initialize
       @stack = []
     end
@@ -38,27 +46,16 @@ module Markaby
       process_tree(parse_tree)
     end
 
-    def text(str)
-      @stack.push([:text, str])
+    alias_method :capture, :eval_code
+
+    def text(str, stack = @stack)
+      stack << [:text, str]
     end
 
-    def tag(name, *args, &block)
-      the_text = args.last.is_a?(String) ? args.pop : nil
-      options = args.any? ? args[0] : nil
-
-      if the_text
-        _tag(name, options) do
-          text the_text
-        end
-      else
-        _tag(name, options, &block)
-      end
-    end
-
-    def _tag(name, options={}, &block)
+    def tag(name, options={}, metadata={}, &block)
       @compiled = false
 
-      tag_stack = [:tag, name, options]
+      tag_stack = [:tag, name, options, metadata]
       @stack.push(tag_stack)
 
       if block_given?
@@ -97,26 +94,30 @@ module Markaby
   private
 
     def recursive_compile(stack, out)
-      stack.map do |type, tag, options, subast|
+      stack.map do |type, tag, options, metadata, subast|
         if type == :tag
-          out << [:text, "<#{tag}"]
+          text("<#{tag}", out)
 
-          if options
-            out << [:text, " "]
+          if !options.empty?
+            text(" ", out)
             out << [:eval, options]
           end
 
-          out << [:text, ">"]
+          if metadata[:self_closing] == true
+            text(" />", out)
+          else
+            text(">", out)
 
-          if subast
-            subast.each do |ast|
-              recursive_compile([ast], out)
+            if subast
+              subast.each do |ast|
+                recursive_compile([ast], out)
+              end
             end
-          end
 
-          out << [:text, "</#{tag}>"]
+            text("</#{tag}>", out)
+          end
         elsif type == :text
-          out << [:text, tag]
+          text(tag, out)
         else
           raise "got here"
         end
@@ -145,7 +146,7 @@ module Markaby
       when :send
         receiver, method_name, *arguments = sexp.children
 
-        if receiver == nil && method_name == :tag
+        if receiver == nil && MACRO_METHODS.include?(method_name)
           tag_name = arguments.shift
           tag_name = tag_name.to_sexp_array[1]
 
